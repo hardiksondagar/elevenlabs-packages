@@ -10,6 +10,7 @@ const ICON_MAP = {
   check: CheckIcon,
   "chevron-down": ChevronDownIcon,
   "chevron-up": ChevronUpIcon,
+  send: SendIcon,
 };
 
 const SIZE_CLASSES = {
@@ -173,6 +174,24 @@ function CheckIcon(props: JSX.HTMLAttributes<SVGSVGElement>) {
       {...props}
     >
       <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function SendIcon(props: JSX.HTMLAttributes<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      height="1em"
+      width="1em"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      {...props}
+    >
+      <path
+        d="M2.59413 5.1485C2.04 3.39377 3.86657 1.83482 5.51245 2.65776L16.47 8.13653C18.0055 8.90429 18.0055 11.0955 16.47 11.8633L5.51245 17.3421C3.86656 18.165 2.04 16.6061 2.59413 14.8513L3.86297 10.8333H7.50006C7.9603 10.8333 8.33339 10.4602 8.33339 10C8.33339 9.53976 7.9603 9.16667 7.50006 9.16667H3.86302L2.59413 5.1485Z"
+        fill="black"
+      />
     </svg>
   );
 }

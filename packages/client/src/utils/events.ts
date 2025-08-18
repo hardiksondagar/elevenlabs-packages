@@ -1,4 +1,5 @@
-import { Language } from "./connection";
+import type { Language } from "./connection";
+import type { CONVERSATION_INITIATION_CLIENT_DATA_TYPE } from "./overrides";
 
 export type UserTranscriptionEvent = {
   type: "user_transcript";
@@ -51,6 +52,12 @@ export type ClientToolCallEvent = {
     expects_response: boolean;
   };
 };
+export type VadScoreEvent = {
+  type: "vad_score";
+  vad_score_event: {
+    vad_score: number;
+  };
+};
 
 // TODO correction missing
 export type IncomingSocketEvent =
@@ -61,7 +68,8 @@ export type IncomingSocketEvent =
   | InternalTentativeAgentResponseEvent
   | ConfigEvent
   | PingEvent
-  | ClientToolCallEvent;
+  | ClientToolCallEvent
+  | VadScoreEvent;
 
 export type PongEvent = {
   type: "pong";
@@ -82,7 +90,7 @@ export type ClientToolResultEvent = {
   is_error: boolean;
 };
 export type InitiationClientDataEvent = {
-  type: "conversation_initiation_client_data";
+  type: typeof CONVERSATION_INITIATION_CLIENT_DATA_TYPE;
   conversation_config_override?: {
     agent?: {
       prompt?: {
@@ -100,6 +108,11 @@ export type InitiationClientDataEvent = {
   };
   custom_llm_extra_body?: any;
   dynamic_variables?: Record<string, string | number | boolean>;
+  user_id?: string;
+  source_info?: {
+    source?: string;
+    version?: string;
+  };
 };
 export type ContextualUpdateEvent = {
   type: "contextual_update";

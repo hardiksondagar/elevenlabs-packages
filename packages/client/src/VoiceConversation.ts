@@ -1,10 +1,16 @@
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./utils/audio";
 import { Input } from "./utils/input";
 import { Output } from "./utils/output";
-import { Connection } from "./utils/connection";
-import { AgentAudioEvent, InterruptionEvent } from "./utils/events";
+import { createConnection } from "./utils/ConnectionFactory";
+import type { BaseConnection } from "./utils/BaseConnection";
+import { WebRTCConnection } from "./utils/WebRTCConnection";
+import type { AgentAudioEvent, InterruptionEvent } from "./utils/events";
 import { applyDelay } from "./utils/applyDelay";
-import { BaseConversation, Options, PartialOptions } from "./BaseConversation";
+import {
+  BaseConversation,
+  type Options,
+  type PartialOptions,
+} from "./BaseConversation";
 
 export class VoiceConversation extends BaseConversation {
   public static async startSession(
@@ -16,7 +22,7 @@ export class VoiceConversation extends BaseConversation {
     fullOptions.onCanSendFeedbackChange({ canSendFeedback: false });
 
     let input: Input | null = null;
-    let connection: Connection | null = null;
+    let connection: BaseConnection | null = null;
     let output: Output | null = null;
     let preliminaryInputStream: MediaStream | null = null;
 
@@ -37,7 +43,7 @@ export class VoiceConversation extends BaseConversation {
       });
 
       await applyDelay(fullOptions.connectionDelay);
-      connection = await Connection.create(options);
+      connection = await createConnection(options);
       [input, output] = await Promise.all([
         Input.create({
           ...connection.inputFormat,
@@ -76,7 +82,7 @@ export class VoiceConversation extends BaseConversation {
 
   protected constructor(
     options: Options,
-    connection: Connection,
+    connection: BaseConnection,
     public readonly input: Input,
     public readonly output: Output,
     public wakeLock: WakeLockSentinel | null
@@ -104,8 +110,14 @@ export class VoiceConversation extends BaseConversation {
 
   protected override handleAudio(event: AgentAudioEvent) {
     if (this.lastInterruptTimestamp <= event.audio_event.event_id) {
-      this.options.onAudio(event.audio_event.audio_base_64);
-      this.addAudioBase64Chunk(event.audio_event.audio_base_64);
+      this.options.onAudio?.(event.audio_event.audio_base_64);
+
+      // Only play audio through the output worklet for WebSocket connections
+      // WebRTC connections handle audio playback directly through LiveKit tracks
+      if (!(this.connection instanceof WebRTCConnection)) {
+        this.addAudioBase64Chunk(event.audio_event.audio_base_64);
+      }
+
       this.currentEventId = event.audio_event.event_id;
       this.updateCanSendFeedback();
       this.updateMode("speaking");
@@ -173,7 +185,13 @@ export class VoiceConversation extends BaseConversation {
   };
 
   public setMicMuted(isMuted: boolean) {
-    this.input.setMuted(isMuted);
+    // Use LiveKit track muting for WebRTC connections
+    if (this.connection instanceof WebRTCConnection) {
+      this.connection.setMicMuted(isMuted);
+    } else {
+      // Use input muting for WebSocket connections
+      this.input.setMuted(isMuted);
+    }
   }
 
   public getInputByteFrequencyData() {

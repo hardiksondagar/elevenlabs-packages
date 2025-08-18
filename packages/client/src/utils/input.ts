@@ -1,5 +1,5 @@
 import { loadRawAudioProcessor } from "./rawAudioProcessor";
-import { FormatConfig } from "./connection";
+import type { FormatConfig } from "./connection";
 import { isIosDevice } from "./compatibility";
 
 export type InputConfig = {
@@ -21,8 +21,8 @@ export class Input {
     try {
       const options: MediaTrackConstraints = {
         sampleRate: { ideal: sampleRate },
-        echoCancellation: { ideal: true },
-        noiseSuppression: { ideal: true },
+        echoCancellation: true,
+        noiseSuppression: true,
       };
 
       if (isIosDevice() && preferHeadphonesForIosDevices) {
@@ -54,8 +54,9 @@ export class Input {
       }
       await loadRawAudioProcessor(context.audioWorklet);
 
+      const constraints = { voiceIsolation: true, ...options };
       inputStream = await navigator.mediaDevices.getUserMedia({
-        audio: options,
+        audio: constraints,
       });
 
       const source = context.createMediaStreamSource(inputStream);

@@ -1,10 +1,10 @@
-import {
-  Connection,
+import type {
+  BaseConnection,
   DisconnectionDetails,
-  type OnDisconnectCallback,
-  type SessionConfig,
-} from "./utils/connection";
-import {
+  OnDisconnectCallback,
+  SessionConfig,
+} from "./utils/BaseConnection";
+import type {
   AgentAudioEvent,
   AgentResponseEvent,
   ClientToolCallEvent,
@@ -12,6 +12,7 @@ import {
   InternalTentativeAgentResponseEvent,
   InterruptionEvent,
   UserTranscriptionEvent,
+  VadScoreEvent,
 } from "./utils/events";
 import type { InputConfig } from "./utils/input";
 
@@ -51,25 +52,26 @@ export type Callbacks = {
   onDisconnect: OnDisconnectCallback;
   onError: (message: string, context?: any) => void;
   onMessage: (props: { message: string; source: Role }) => void;
-  onAudio: (base64Audio: string) => void;
+  onAudio?: (base64Audio: string) => void;
   onModeChange: (prop: { mode: Mode }) => void;
   onStatusChange: (prop: { status: Status }) => void;
   onCanSendFeedbackChange: (prop: { canSendFeedback: boolean }) => void;
   onUnhandledClientToolCall?: (
     params: ClientToolCallEvent["client_tool_call"]
   ) => void;
+  onVadScore?: (props: { vadScore: number }) => void;
 };
 
 const EMPTY_FREQUENCY_DATA = new Uint8Array(0);
 
 export class BaseConversation {
-  protected lastInterruptTimestamp: number = 0;
+  protected lastInterruptTimestamp = 0;
   protected mode: Mode = "listening";
   protected status: Status = "connecting";
-  protected volume: number = 1;
-  protected currentEventId: number = 1;
-  protected lastFeedbackEventId: number = 1;
-  protected canSendFeedback: boolean = false;
+  protected volume = 1;
+  protected currentEventId = 1;
+  protected lastFeedbackEventId = 0;
+  protected canSendFeedback = false;
 
   protected static getFullOptions(partialOptions: PartialOptions): Options {
     return {
@@ -89,11 +91,12 @@ export class BaseConversation {
 
   protected constructor(
     protected readonly options: Options,
-    protected readonly connection: Connection
+    protected readonly connection: BaseConnection
   ) {
     this.options.onConnect({ conversationId: connection.conversationId });
     this.connection.onMessage(this.onMessage);
     this.connection.onDisconnect(this.endSessionWithDetails);
+    this.connection.onModeChange(mode => this.updateMode(mode));
     this.updateStatus("connected");
   }
 
@@ -165,9 +168,20 @@ export class BaseConversation {
     });
   }
 
+  protected handleVadScore(event: VadScoreEvent) {
+    if (this.options.onVadScore) {
+      this.options.onVadScore({
+        vadScore: event.vad_score_event.vad_score,
+      });
+    }
+  }
+
   protected async handleClientToolCall(event: ClientToolCallEvent) {
     if (
-      this.options.clientTools.hasOwnProperty(event.client_tool_call.tool_name)
+      Object.prototype.hasOwnProperty.call(
+        this.options.clientTools,
+        event.client_tool_call.tool_name
+      )
     ) {
       try {
         const result =
@@ -187,8 +201,7 @@ export class BaseConversation {
         });
       } catch (e) {
         this.onError(
-          "Client tool execution failed with following error: " +
-            (e as Error)?.message,
+          `Client tool execution failed with following error: ${(e as Error)?.message}`,
           {
             clientToolName: event.client_tool_call.tool_name,
           }
@@ -196,7 +209,7 @@ export class BaseConversation {
         this.connection.sendMessage({
           type: "client_tool_result",
           tool_call_id: event.client_tool_call.tool_call_id,
-          result: "Client tool execution failed: " + (e as Error)?.message,
+          result: `Client tool execution failed: ${(e as Error)?.message}`,
           is_error: true,
         });
       }
@@ -251,6 +264,11 @@ export class BaseConversation {
         return;
       }
 
+      case "vad_score": {
+        this.handleVadScore(parsedEvent);
+        return;
+      }
+
       case "ping": {
         this.connection.sendMessage({
           type: "pong",
@@ -286,7 +304,9 @@ export class BaseConversation {
     this.volume = volume;
   };
 
-  public setMicMuted(isMuted: boolean) {}
+  public setMicMuted(isMuted: boolean) {
+    this.connection.setMicMuted(isMuted);
+  }
 
   public setOutputMuted(isMuted: boolean) {}
 

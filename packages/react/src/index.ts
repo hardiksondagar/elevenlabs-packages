@@ -8,7 +8,38 @@ import {
   Status,
   ClientToolsConfig,
   InputConfig,
+  VadScoreEvent,
 } from "@elevenlabs/client";
+
+import { PACKAGE_VERSION } from "./version";
+
+export type Location = "us" | "global" | "eu-residency" | "in-residency";
+
+export function parseLocation(location: string = "us"): Location {
+  switch (location) {
+    case "eu-residency":
+    case "in-residency":
+    case "us":
+    case "global":
+      return location;
+    default:
+      console.warn(
+        `[ConversationalAI] Invalid server-location: ${location}. Defaulting to "us"`
+      );
+      return "us";
+  }
+}
+
+export function getOriginForLocation(location: Location): string {
+  const originMap: Record<Location, string> = {
+    us: "wss://api.elevenlabs.io",
+    "eu-residency": "wss://api.eu.residency.elevenlabs.io",
+    "in-residency": "wss://api.in.residency.elevenlabs.io",
+    global: "wss://api.elevenlabs.io",
+  };
+
+  return originMap[location];
+}
 
 export type {
   Role,
@@ -17,11 +48,17 @@ export type {
   SessionConfig,
   DisconnectionDetails,
   Language,
+  VadScoreEvent,
 } from "@elevenlabs/client";
 export { postOverallFeedback } from "@elevenlabs/client";
 
 export type HookOptions = Partial<
-  SessionConfig & HookCallbacks & ClientToolsConfig & InputConfig
+  SessionConfig &
+    HookCallbacks &
+    ClientToolsConfig &
+    InputConfig & {
+      serverLocation?: Location | string;
+    }
 >;
 export type ControlledState = {
   micMuted?: boolean;
@@ -34,14 +71,18 @@ export type HookCallbacks = Pick<
   | "onError"
   | "onMessage"
   | "onAudio"
+  | "onModeChange"
+  | "onStatusChange"
+  | "onCanSendFeedbackChange"
   | "onDebug"
   | "onUnhandledClientToolCall"
+  | "onVadScore"
 >;
 
 export function useConversation<T extends HookOptions & ControlledState>(
   props: T = {} as T
 ) {
-  const { micMuted, volume, ...defaultOptions } = props;
+  const { micMuted, volume, serverLocation, ...defaultOptions } = props;
   const conversationRef = useRef<Conversation | null>(null);
   const lockRef = useRef<Promise<Conversation> | null>(null);
   const [status, setStatus] = useState<Status>("disconnected");
@@ -78,17 +119,58 @@ export function useConversation<T extends HookOptions & ControlledState>(
       }
 
       try {
+        const resolvedServerLocation = parseLocation(
+          options?.serverLocation || serverLocation
+        );
+        const origin = getOriginForLocation(resolvedServerLocation);
+
         lockRef.current = Conversation.startSession({
           ...(defaultOptions ?? {}),
           ...(options ?? {}),
+          origin,
+          overrides: {
+            ...(defaultOptions?.overrides ?? {}),
+            ...(options?.overrides ?? {}),
+            client: {
+              ...(defaultOptions?.overrides?.client ?? {}),
+              ...(options?.overrides?.client ?? {}),
+              source:
+                options?.overrides?.client?.source ||
+                defaultOptions?.overrides?.client?.source ||
+                "react_sdk",
+              version:
+                options?.overrides?.client?.version ||
+                defaultOptions?.overrides?.client?.version ||
+                PACKAGE_VERSION,
+            },
+          },
+          // Pass through user-provided callbacks
+          onConnect: options?.onConnect || defaultOptions?.onConnect,
+          onDisconnect: options?.onDisconnect || defaultOptions?.onDisconnect,
+          onError: options?.onError || defaultOptions?.onError,
+          onMessage: options?.onMessage || defaultOptions?.onMessage,
+          onAudio: options?.onAudio || defaultOptions?.onAudio,
+          onDebug: options?.onDebug || defaultOptions?.onDebug,
+          onUnhandledClientToolCall:
+            options?.onUnhandledClientToolCall ||
+            defaultOptions?.onUnhandledClientToolCall,
+          onVadScore: options?.onVadScore || defaultOptions?.onVadScore,
           onModeChange: ({ mode }) => {
             setMode(mode);
+            (options?.onModeChange || defaultOptions?.onModeChange)?.({ mode });
           },
           onStatusChange: ({ status }) => {
             setStatus(status);
+            (options?.onStatusChange || defaultOptions?.onStatusChange)?.({
+              status,
+            });
           },
           onCanSendFeedbackChange: ({ canSendFeedback }) => {
             setCanSendFeedback(canSendFeedback);
+            (
+              options?.onCanSendFeedbackChange ||
+              defaultOptions?.onCanSendFeedbackChange
+            )?.({ canSendFeedback });
           },
         } as Options);
 

@@ -38,6 +38,8 @@ export interface WidgetConfig {
   mic_muting_enabled: boolean;
   transcript_enabled: boolean;
   text_input_enabled: boolean;
+  default_expanded: boolean;
+  always_expanded: boolean;
   text_contents: Partial<TextContents>;
   styles?: Partial<Styles>;
   language_presets: Partial<
@@ -54,6 +56,7 @@ export interface WidgetConfig {
   text_only: boolean;
   supports_text_only: boolean;
   first_message?: string;
+  use_rtc?: boolean;
 }
 
 export type AvatarConfig =
@@ -75,6 +78,7 @@ export const DefaultTextContents = {
   main_label: "Need help?",
   start_call: "Start a call",
   start_chat: "Start a chat",
+  send_message: "Send",
   new_call: "New call",
   end_call: "End",
   mute_microphone: "Mute microphone",
