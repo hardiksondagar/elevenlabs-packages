@@ -40,6 +40,7 @@ export class WebRTCConnection extends BaseConnection {
   private isConnected = false;
   private audioEventId = 1;
   private audioCaptureContext: AudioContext | null = null;
+  private audioElements: HTMLAudioElement[] = [];
 
   private constructor(
     room: Room,
@@ -233,6 +234,15 @@ export class WebRTCConnection extends BaseConnection {
           audioElement.style.display = "none";
           document.body.appendChild(audioElement);
 
+          // Store reference for volume control
+          this.audioElements.push(audioElement);
+
+          // Apply current volume if it exists (for when volume was set before audio track arrived)
+          if (this.audioElements.length === 1) {
+            // First audio element - trigger a callback to sync with current volume
+            this.onDebug?.({ type: "audio_element_ready" });
+          }
+
           // Set up audio capture for onAudio callback
           await this.setupAudioCapture(remoteAudioTrack);
         }
@@ -243,10 +253,9 @@ export class WebRTCConnection extends BaseConnection {
       RoomEvent.ActiveSpeakersChanged,
       async (speakers: Participant[]) => {
         if (speakers.length > 0) {
-          const participant = speakers[0];
-          if (participant.identity.includes("agent")) {
-            this.updateMode("speaking");
-          }
+          this.updateMode(
+            speakers[0].identity.startsWith("agent") ? "speaking" : "listening"
+          );
         } else {
           this.updateMode("listening");
         }
@@ -276,6 +285,14 @@ export class WebRTCConnection extends BaseConnection {
         });
         this.audioCaptureContext = null;
       }
+
+      // Clean up audio elements
+      this.audioElements.forEach(element => {
+        if (element.parentNode) {
+          element.parentNode.removeChild(element);
+        }
+      });
+      this.audioElements = [];
 
       this.room.disconnect();
     }
@@ -403,5 +420,11 @@ export class WebRTCConnection extends BaseConnection {
     } catch (error) {
       console.warn("Failed to set up audio capture:", error);
     }
+  }
+
+  public setAudioVolume(volume: number) {
+    this.audioElements.forEach(element => {
+      element.volume = volume;
+    });
   }
 }

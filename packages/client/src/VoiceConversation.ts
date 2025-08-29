@@ -1,8 +1,8 @@
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./utils/audio";
-import { Input } from "./utils/input";
+import { Input, InputConfig } from "./utils/input";
 import { Output } from "./utils/output";
 import { createConnection } from "./utils/ConnectionFactory";
-import type { BaseConnection } from "./utils/BaseConnection";
+import type { BaseConnection, FormatConfig } from "./utils/BaseConnection";
 import { WebRTCConnection } from "./utils/WebRTCConnection";
 import type { AgentAudioEvent, InterruptionEvent } from "./utils/events";
 import { applyDelay } from "./utils/applyDelay";
@@ -18,8 +18,12 @@ export class VoiceConversation extends BaseConversation {
   ): Promise<VoiceConversation> {
     const fullOptions = BaseConversation.getFullOptions(options);
 
-    fullOptions.onStatusChange({ status: "connecting" });
-    fullOptions.onCanSendFeedbackChange({ canSendFeedback: false });
+    if (fullOptions.onStatusChange) {
+      fullOptions.onStatusChange({ status: "connecting" });
+    }
+    if (fullOptions.onCanSendFeedbackChange) {
+      fullOptions.onCanSendFeedbackChange({ canSendFeedback: false });
+    }
 
     let input: Input | null = null;
     let connection: BaseConnection | null = null;
@@ -48,8 +52,12 @@ export class VoiceConversation extends BaseConversation {
         Input.create({
           ...connection.inputFormat,
           preferHeadphonesForIosDevices: options.preferHeadphonesForIosDevices,
+          inputDeviceId: options.inputDeviceId,
         }),
-        Output.create(connection.outputFormat),
+        Output.create({
+          ...connection.outputFormat,
+          outputDeviceId: options.outputDeviceId,
+        }),
       ]);
 
       preliminaryInputStream?.getTracks().forEach(track => track.stop());
@@ -63,7 +71,9 @@ export class VoiceConversation extends BaseConversation {
         wakeLock
       );
     } catch (error) {
-      fullOptions.onStatusChange({ status: "disconnected" });
+      if (fullOptions.onStatusChange) {
+        fullOptions.onStatusChange({ status: "disconnected" });
+      }
       preliminaryInputStream?.getTracks().forEach(track => track.stop());
       connection?.close();
       await input?.close();
@@ -76,15 +86,15 @@ export class VoiceConversation extends BaseConversation {
     }
   }
 
-  private inputFrequencyData?: Uint8Array;
-  private outputFrequencyData?: Uint8Array;
+  private inputFrequencyData?: Uint8Array<ArrayBuffer>;
+  private outputFrequencyData?: Uint8Array<ArrayBuffer>;
   private isMuted: boolean = false;
 
   protected constructor(
     options: Options,
     connection: BaseConnection,
-    public readonly input: Input,
-    public readonly output: Output,
+    public input: Input,
+    public output: Output,
     public wakeLock: WakeLockSentinel | null
   ) {
     super(options, connection);
@@ -194,18 +204,18 @@ export class VoiceConversation extends BaseConversation {
     }
   }
 
-  public getInputByteFrequencyData() {
+  public getInputByteFrequencyData(): Uint8Array<ArrayBuffer> {
     this.inputFrequencyData ??= new Uint8Array(
       this.input.analyser.frequencyBinCount
-    );
+    ) as Uint8Array<ArrayBuffer>;
     this.input.analyser.getByteFrequencyData(this.inputFrequencyData);
     return this.inputFrequencyData;
   }
 
-  public getOutputByteFrequencyData() {
+  public getOutputByteFrequencyData(): Uint8Array<ArrayBuffer> {
     this.outputFrequencyData ??= new Uint8Array(
       this.output.analyser.frequencyBinCount
-    );
+    ) as Uint8Array<ArrayBuffer>;
     this.output.analyser.getByteFrequencyData(this.outputFrequencyData);
     return this.outputFrequencyData;
   }
@@ -243,4 +253,68 @@ export class VoiceConversation extends BaseConversation {
       );
     }, 100); // Short delay to ensure interrupt is processed
   }
+
+  public async changeInputDevice({
+    sampleRate,
+    format,
+    preferHeadphonesForIosDevices,
+    inputDeviceId,
+  }: FormatConfig & InputConfig): Promise<Input> {
+    try {
+      await this.input.close();
+
+      const newInput = await Input.create({
+        sampleRate,
+        format,
+        preferHeadphonesForIosDevices,
+        inputDeviceId,
+      });
+
+      this.input = newInput;
+
+      return this.input;
+    } catch (error) {
+      console.error("Error changing input device", error);
+      throw error;
+    }
+  }
+
+  public async changeOutputDevice({
+    sampleRate,
+    format,
+    outputDeviceId,
+  }: FormatConfig): Promise<Output> {
+    try {
+      await this.output.close();
+
+      const newOutput = await Output.create({
+        sampleRate,
+        format,
+        outputDeviceId,
+      });
+
+      this.output = newOutput;
+
+      return this.output;
+    } catch (error) {
+      console.error("Error changing output device", error);
+      throw error;
+    }
+  }
+
+  public setVolume = ({ volume }: { volume: number }) => {
+    // clamp & coerce
+    const clampedVolume = Number.isFinite(volume)
+      ? Math.min(1, Math.max(0, volume))
+      : 1;
+    this.volume = clampedVolume;
+
+    if (this.connection instanceof WebRTCConnection) {
+      // For WebRTC connections, control volume via HTML audio elements
+      this.connection.setAudioVolume(clampedVolume);
+    } else {
+      // For WebSocket connections, control volume via gain node
+      this.output.gain.gain.value = clampedVolume;
+    }
+  };
 }
