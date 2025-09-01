@@ -49,8 +49,5 @@
   },
   "dependencies": {
     "livekit-client": "^2.11.4"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }
