@@ -1,6 +1,6 @@
 {
-  "name": "@hardiksondagar/elevenlabs-client",
-  "version": "0.1.11",
+  "name": "@elevenlabs/client",
+  "version": "0.6.0",
   "description": "ElevenLabs JavaScript Client Library",
   "main": "./dist/lib.umd.js",
   "module": "./dist/lib.module.js",
@@ -8,10 +8,6 @@
   "type": "module",
   "unpkg": "./dist/lib.umd.js",
   "types": "./dist/index.d.ts",
-  "files": [
-    "dist",
-    "README.md"
-  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

@@ -1,7 +1,7 @@
 {
   "name": "packages",
   "version": "1.0.0",
-  "private": false,
+  "private": true,
   "scripts": {
     "create": "node scripts/create",
     "lint": "pnpm recursive run lint",
