@@ -1,25 +1,30 @@
-import type { Plugin } from 'vite';
+import type { Plugin } from "vite";
 
-// Patterns to strip webkit-hyphens media query conditions that cause issues in Shadow DOM
-// See https://github.com/tailwindlabs/tailwindcss/issues/15005
-const WEBKIT_HYPHENS_DOUBLE_PAREN = /\(\(-webkit-hyphens:\s*none\)\)\s*and\s*/g;
-const WEBKIT_HYPHENS_SINGLE_PAREN = /\(-webkit-hyphens:\s*none\)\s*and\s*/g;
-const ROOT_SELECTOR = /:root\b/g;
-const CSS_MODULE_PATTERN = /\.css\?/;
+/**
+ * Vite plugin to normalize Tailwind CSS for Shadow DOM usage.
 
+ * Based on https://github.com/Alletkla/vite-plugin-tailwind-shadowdom
+ * @see https://github.com/tailwindlabs/tailwindcss/issues/15005
+ */
 export function tailwindFixShadowDOM(): Plugin {
   return {
-    name: 'vite-plugin-tailwind-fix-shadowdom',
-    enforce: 'post',
+    name: "vite-plugin-tailwind-fix-shadowdom",
+    enforce: "post",
+
     transform(code, id) {
-      if (!CSS_MODULE_PATTERN.test(id)) {
+      if (!id.includes(".css?")) {
         return null;
       }
 
       const transformed = code
-        .replace(WEBKIT_HYPHENS_DOUBLE_PAREN, '')
-        .replace(WEBKIT_HYPHENS_SINGLE_PAREN, '')
-        .replace(ROOT_SELECTOR, ':host');
+        // Replace the problematic @supports blocks with a transparent @media all wrapper.
+        // Unconditionally applies the fallback variables without needing complex brace parsing.
+        .replace(
+          /@supports\s+[^{]*(?:-webkit-hyphens|margin-trim|-moz-orient)[^{]*\{/g,
+          "@media all {"
+        )
+        // Convert :root to :host for Shadow DOM scoping
+        .replace(/:root\b/g, ":host");
 
       if (transformed !== code) {
         return {
