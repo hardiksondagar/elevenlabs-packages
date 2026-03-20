@@ -12,7 +12,6 @@ import chunk from "./__tests__/chunk";
 import { Mode, Status, Conversation } from "./index";
 import { createConnection } from "./utils/ConnectionFactory";
 import type { SessionConfig } from "./utils/BaseConnection";
-import { VoiceConversation } from "./VoiceConversation";
 
 const CONVERSATION_ID = "TEST_CONVERSATION_ID";
 const OUTPUT_AUDIO_FORMAT = "pcm_16000";
@@ -107,20 +106,18 @@ describe("Conversation", () => {
         conversationId: CONVERSATION_ID,
       });
 
-      if (conversationType === "voice") {
+      if (conversation.type === "voice") {
         // Test device switching functionality - use existing device instead of non-existent one
         try {
           // Test input device change without specifying a device ID (uses default)
-          await (conversation as VoiceConversation).changeInputDevice({
+          await conversation.changeInputDevice({
             sampleRate: 16000,
             format: "pcm",
             preferHeadphonesForIosDevices: true,
             // Specifying a device ID that doesn't exist will cause a timeout in Chromium
           });
 
-          expect(
-            (conversation as VoiceConversation).input.inputStream
-          ).toBeDefined();
+          expect(conversation.input.inputStream).toBeDefined();
         } catch (error) {
           // If device change fails completely, skip the test but don't fail
           console.warn(
@@ -131,15 +128,13 @@ describe("Conversation", () => {
 
         try {
           // Test output device change without specifying a device ID (uses default)
-          await (conversation as VoiceConversation).changeOutputDevice({
+          await conversation.changeOutputDevice({
             sampleRate: 16000,
             format: "pcm",
             // Specifying a device ID that doesn't exist will cause a timeout in Chromium
           });
 
-          expect(
-            (conversation as VoiceConversation).output.audioElement
-          ).toBeDefined();
+          expect(conversation.output.audioElement).toBeDefined();
         } catch (error) {
           // If device change fails completely, skip the test but don't fail
           console.warn(
@@ -1218,9 +1213,7 @@ describe("Device Change Default Device", () => {
     const conversation = await conversationPromise;
 
     // Test that changeInputDevice works without deviceId (uses default)
-    const inputResult = await (
-      conversation as VoiceConversation
-    ).changeInputDevice({
+    const inputResult = await conversation.changeInputDevice({
       sampleRate: 16000,
       format: "pcm",
       // No inputDeviceId provided - should use browser default
@@ -1230,9 +1223,7 @@ describe("Device Change Default Device", () => {
     expect(inputResult.inputStream).toBeDefined();
 
     // Test that changeOutputDevice works without deviceId (uses default)
-    const outputResult = await (
-      conversation as VoiceConversation
-    ).changeOutputDevice({
+    const outputResult = await conversation.changeOutputDevice({
       sampleRate: 16000,
       format: "pcm",
       // No outputDeviceId provided - should use browser default
@@ -1344,7 +1335,7 @@ describe("Wake Lock", () => {
 
     expect(mockWakeLock.request).toHaveBeenCalledWith("screen");
 
-    expect((conversation as VoiceConversation).wakeLock).toBe(mockSentinel);
+    expect(conversation.wakeLock).toBe(mockSentinel);
 
     await conversation.endSession();
     server.close();
@@ -1387,7 +1378,7 @@ describe("Wake Lock", () => {
     expect(mockWakeLock.request).not.toHaveBeenCalled();
 
     // Verify the conversation does not have a wake lock
-    expect((conversation as VoiceConversation).wakeLock).toBeNull();
+    expect(conversation.wakeLock).toBeNull();
 
     await conversation.endSession();
     server.close();
@@ -1423,12 +1414,12 @@ describe("Wake Lock", () => {
 
     const conversation = await conversationPromise;
 
-    expect((conversation as VoiceConversation).wakeLock).toBe(mockSentinel);
+    expect(conversation.wakeLock).toBe(mockSentinel);
 
     await conversation.endSession();
 
     expect(mockSentinel.release).toHaveBeenCalled();
-    expect((conversation as VoiceConversation).wakeLock).toBeNull();
+    expect(conversation.wakeLock).toBeNull();
 
     server.close();
   });
@@ -1486,7 +1477,7 @@ describe("Wake Lock", () => {
     await sleep(100);
 
     expect(requestCallCount).toBe(2);
-    expect((conversation as VoiceConversation).wakeLock).toBe(secondSentinel);
+    expect(conversation.wakeLock).toBe(secondSentinel);
 
     await conversation.endSession();
     server.close();
