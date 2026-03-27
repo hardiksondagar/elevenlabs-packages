@@ -41,6 +41,12 @@
 
 - 29e1dfc: Fix widget crash on Wix sites where addEventListener is made non-writable by Wix security hardening
 
+## 0.10.1-next.0
+
+### Patch Changes
+
+- f15891e: Fix widget crash on Wix sites caused by frozen RTCPeerConnection prototype
+
 ## 0.10.0
 
 ### Minor Changes

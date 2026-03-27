@@ -29,13 +29,13 @@ The ElevenAgents SDKs provide a unified interface for integrating multimodal AI 
 
 ### Available Packages
 
-| Package                                               | Description                                      | Version                                                                                                                               | Links                                                                                                                 |
-| ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [`@elevenlabs/client`](#elevenlabsclient)             | Core TypeScript/JavaScript client                | [![npm](https://img.shields.io/npm/v/@elevenlabs/client)](https://www.npmjs.com/package/@elevenlabs/client)                           | [README](packages/client/README.md) • [Docs](https://elevenlabs.io/docs/agents-platform/libraries/java-script)        |
-| [`@elevenlabs/react`](#elevenlabsreact)               | React hooks and components for web applications  | [![npm](https://img.shields.io/npm/v/@elevenlabs/react)](https://www.npmjs.com/package/@elevenlabs/react)                             | [README](packages/react/README.md) • [Docs](https://elevenlabs.io/docs/agents-platform/libraries/react)               |
-| [`@elevenlabs/react-native`](#elevenlabsreact-native) | React Native SDK for cross-platform applications | [![npm](https://img.shields.io/npm/v/@elevenlabs/react-native)](https://www.npmjs.com/package/@elevenlabs/react-native)               | [README](packages/react-native/README.md) • [Docs](https://elevenlabs.io/docs/agents-platform/libraries/react-native) |
-| [`@elevenlabs/convai-widget-core`](#widgets)          | Core widget library for embedding Agents         | [![npm](https://img.shields.io/npm/v/@elevenlabs/convai-widget-core)](https://www.npmjs.com/package/@elevenlabs/convai-widget-core)   | [Docs](https://elevenlabs.io/docs/agents-platform/customization/widget)                                               |
-| [`@elevenlabs/convai-widget-embed`](#widgets)         | Pre-bundled embeddable widget                    | [![npm](https://img.shields.io/npm/v/@elevenlabs/convai-widget-embed)](https://www.npmjs.com/package/@elevenlabs/convai-widget-embed) | [Docs](https://elevenlabs.io/docs/agents-platform/customization/widget)                                               |
+| Package                                               | Description                                      | Version                                                                                                                               | Links                                                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`@elevenlabs/client`](#elevenlabsclient)             | Core TypeScript/JavaScript client                | [![npm](https://img.shields.io/npm/v/@elevenlabs/client)](https://www.npmjs.com/package/@elevenlabs/client)                           | [README](packages/client/README.md) • [Docs](https://elevenlabs.io/docs/eleven-agents/libraries/java-script)        |
+| [`@elevenlabs/react`](#elevenlabsreact)               | React hooks and components for web applications  | [![npm](https://img.shields.io/npm/v/@elevenlabs/react)](https://www.npmjs.com/package/@elevenlabs/react)                             | [README](packages/react/README.md) • [Docs](https://elevenlabs.io/docs/eleven-agents/libraries/react)               |
+| [`@elevenlabs/react-native`](#elevenlabsreact-native) | React Native SDK for cross-platform applications | [![npm](https://img.shields.io/npm/v/@elevenlabs/react-native)](https://www.npmjs.com/package/@elevenlabs/react-native)               | [README](packages/react-native/README.md) • [Docs](https://elevenlabs.io/docs/eleven-agents/libraries/react-native) |
+| [`@elevenlabs/convai-widget-core`](#widgets)          | Core widget library for embedding Agents         | [![npm](https://img.shields.io/npm/v/@elevenlabs/convai-widget-core)](https://www.npmjs.com/package/@elevenlabs/convai-widget-core)   | [Docs](https://elevenlabs.io/docs/eleven-agents/customization/widget)                                               |
+| [`@elevenlabs/convai-widget-embed`](#widgets)         | Pre-bundled embeddable widget                    | [![npm](https://img.shields.io/npm/v/@elevenlabs/convai-widget-embed)](https://www.npmjs.com/package/@elevenlabs/convai-widget-embed) | [Docs](https://elevenlabs.io/docs/eleven-agents/customization/widget)                                               |
 
 ## Package Details
 
@@ -104,7 +104,7 @@ Add the following permissions to your `AndroidManifest.xml`:
 
 The ElevenAgents Widgets provide an easy way to embed AI agents into any website as a web component.
 
-Learn how to embed the widget into your website [here](https://elevenlabs.io/docs/agents-platform/customization/widget).
+Learn how to embed the widget into your website [here](https://elevenlabs.io/docs/eleven-agents/customization/widget).
 
 ## Client Tools
 
@@ -127,7 +127,7 @@ conversation.startSession({
 });
 ```
 
-[Learn more here](https://elevenlabs.io/docs/agents-platform/customization/tools/client-tools)
+[Learn more here](https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools)
 
 ## Examples
 
@@ -140,14 +140,14 @@ Explore our example applications to see the SDKs in action:
 
 For detailed documentation, visit:
 
-- [React SDK API](https://elevenlabs.io/docs/agents-platform/libraries/react)
-- [React Native SDK API](https://elevenlabs.io/docs/agents-platform/libraries/react-native)
-- [TypeScript/JavaScript Client API](https://elevenlabs.io/docs/agents-platform/libraries/java-script)
-- [Widget](https://elevenlabs.io/docs/agents-platform/customization/widget)
+- [React SDK API](https://elevenlabs.io/docs/eleven-agents/libraries/react)
+- [React Native SDK API](https://elevenlabs.io/docs/eleven-agents/libraries/react-native)
+- [TypeScript/JavaScript Client API](https://elevenlabs.io/docs/eleven-agents/libraries/java-script)
+- [Widget](https://elevenlabs.io/docs/eleven-agents/customization/widget)
 
 ## Support
 
-- [Documentation](https://elevenlabs.io/docs/agents-platform/overview)
+- [Documentation](https://elevenlabs.io/docs/eleven-agents/overview)
 - [Discord Community](https://discord.gg/elevenlabs)
 - [Issues](https://github.com/elevenlabs/packages/issues)
 - [Support Email](mailto:support@elevenlabs.io)

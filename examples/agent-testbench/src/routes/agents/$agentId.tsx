@@ -1,10 +1,12 @@
 import { createFileRoute, ClientOnly } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { useCallback, useState } from "react";
 import { z } from "zod";
 
 import { elevenlabs } from "@/lib/elevenlabs.server";
+import { LocalStorage } from "@/lib/localStorage";
 import { Page } from "@/components/page";
-import { ConversationProvider } from "@/components/conversation-provider";
+import { ConversationProvider } from "@elevenlabs/react";
 import { LogProvider } from "@/components/log-provider";
 import { PermissionsLogger } from "@/components/permissions-logger";
 import { AgentPage } from "@/components/agent-page";
@@ -46,6 +48,14 @@ export const Route = createFileRoute("/agents/$agentId")({
 
 function RouteComponent() {
   const { agent, error } = Route.useLoaderData();
+  const [isMuted, setIsMuted] = useState(() => {
+    return LocalStorage.getIsMuted() ?? false;
+  });
+
+  const handleMutedChange = useCallback((muted: boolean) => {
+    setIsMuted(muted);
+    LocalStorage.setIsMuted(muted);
+  }, []);
 
   if (error) {
     return (
@@ -59,13 +69,16 @@ function RouteComponent() {
   }
 
   return (
-    <LogProvider>
-      <ConversationProvider>
-        <AgentPage agent={agent} />
-      </ConversationProvider>
-      <ClientOnly>
+    <ClientOnly>
+      <LogProvider>
+        <ConversationProvider
+          isMuted={isMuted}
+          onMutedChange={handleMutedChange}
+        >
+          <AgentPage agent={agent} />
+        </ConversationProvider>
         <PermissionsLogger />
-      </ClientOnly>
-    </LogProvider>
+      </LogProvider>
+    </ClientOnly>
   );
 }

@@ -1,7 +1,9 @@
 import type { IncomingSocketEvent, OutgoingSocketEvent } from "./events";
 import type { Mode } from "../BaseConversation";
-import type { ConversationConfigOverrideAgentLanguage as Language } from "@elevenlabs/types/generated/types/asyncapi-types";
-import type { DisconnectionDetails } from "@elevenlabs/types";
+import type {
+  DisconnectionDetails,
+  ConversationConfigOverrideAgentLanguage as Language,
+} from "@elevenlabs/types";
 
 export type {
   DisconnectionDetails,
@@ -17,7 +19,6 @@ export type DelayConfig = {
 export type FormatConfig = {
   format: "pcm" | "ulaw";
   sampleRate: number;
-  outputDeviceId?: string;
 };
 
 export type OnDisconnectCallback = (details: DisconnectionDetails) => void;
@@ -44,10 +45,6 @@ export type BaseSessionConfig = {
     conversation?: {
       textOnly?: boolean;
     };
-    client?: {
-      source?: string;
-      version?: string;
-    };
   };
   customLlmExtraBody?: unknown;
   dynamicVariables?: Record<string, string | number | boolean>;
@@ -62,7 +59,7 @@ export type ConnectionType = "websocket" | "webrtc";
 
 export type PublicSessionConfig = BaseSessionConfig & {
   agentId: string;
-  connectionType: ConnectionType;
+  connectionType?: ConnectionType;
   signedUrl?: never;
   conversationToken?: never;
 };
@@ -109,7 +106,6 @@ export abstract class BaseConnection {
 
   public abstract close(): void;
   public abstract sendMessage(message: OutgoingSocketEvent): void;
-  public abstract setMicMuted(isMuted: boolean): Promise<void>;
 
   public onMessage(callback: OnMessageCallback) {
     this.onMessageCallback = callback;

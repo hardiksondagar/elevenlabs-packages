@@ -1,29 +1,23 @@
 {
   "name": "@elevenlabs/react-native",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "ElevenLabs React Native SDK for the Agents Platform",
-  "main": "./dist/lib.js",
-  "module": "./dist/lib.module.js",
-  "source": "src/index.ts",
-  "unpkg": "./dist/lib.umd.js",
-  "types": "./dist/index.d.ts",
+  "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/lib.modern.js",
-      "require": "./dist/lib.js"
+      "browser": "./dist/index.js",
+      "react-native": "./dist/index.react-native.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
     "generate-version": "printf \"// This file is auto-generated during build\\nexport const PACKAGE_VERSION = \\\"%s\\\";\\n\" \"$npm_package_version\" > src/version.ts",
-    "bundle": "microbundle --jsx React.createElement --jsxFragment React.Fragment --jsxImportSource react src/index.ts",
-    "build": "BROWSERSLIST_ENV=modern node --run bundle",
-    "dev": "BROWSERSLIST_ENV=modern node --run bundle -- --watch --no-compress",
-    "clean": "rm -rf ./dist",
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "clean": "tsc --build tsconfig.build.json --clean && rm -rf ./dist",
     "check-types": "tsc --noEmit --skipLibCheck",
     "lint:es": "pnpm exec eslint .",
-    "lint:prettier": "prettier 'src/**/*.ts' --check",
-    "test": "jest"
+    "lint:prettier": "prettier 'src/**/*.ts' --check"
   },
   "keywords": [
     "elevenlabs",
@@ -38,24 +32,16 @@
   "peerDependencies": {
     "@livekit/react-native": "^2.9.2",
     "@livekit/react-native-webrtc": "^137.0.2",
-    "livekit-client": "^2.15.4",
     "react": ">=17.0.0",
     "react-native": ">=0.70.0"
   },
   "dependencies": {
-    "@elevenlabs/types": "workspace:*"
+    "@elevenlabs/client": "workspace:*",
+    "@elevenlabs/react": "workspace:*"
   },
   "devDependencies": {
-    "@testing-library/jest-native": "^5.4.3",
-    "@testing-library/react-native": "^13.2.0",
-    "@types/jest": "^29.5.12",
     "@types/react": "^19.1.1",
-    "@types/react-native": "^0.73.0",
     "eslint": "^9.8.0",
-    "jest": "^29.7.0",
-    "microbundle": "^0.15.1",
-    "react-test-renderer": "19.1.0",
-    "ts-jest": "^29.2.5",
     "typescript": "^5.5.4"
   },
   "repository": {
@@ -64,6 +50,7 @@
     "directory": "packages/react-native"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "next"
   }
 }

@@ -12,6 +12,7 @@ import chunk from "./__tests__/chunk";
 import { Mode, Status, Conversation } from "./index";
 import { createConnection } from "./utils/ConnectionFactory";
 import type { SessionConfig } from "./utils/BaseConnection";
+import { PACKAGE_VERSION } from "./version";
 
 const CONVERSATION_ID = "TEST_CONVERSATION_ID";
 const OUTPUT_AUDIO_FORMAT = "pcm_16000";
@@ -119,7 +120,7 @@ describe("Conversation", () => {
             // Specifying a device ID that doesn't exist will cause a timeout in Chromium
           });
 
-          expect(conversation.input.inputStream).toBeDefined();
+          // Success - the device change completed without throwing
         } catch (error) {
           // If device change fails completely, skip the test but don't fail
           console.warn(
@@ -136,7 +137,7 @@ describe("Conversation", () => {
             // Specifying a device ID that doesn't exist will cause a timeout in Chromium
           });
 
-          expect(conversation.output.audioElement).toBeDefined();
+          // Success - the device change completed without throwing
         } catch (error) {
           // If device change fails completely, skip the test but don't fail
           console.warn(
@@ -160,6 +161,10 @@ describe("Conversation", () => {
           },
           custom_llm_extra_body: CUSTOM_LLM_EXTRA_BODY,
           user_id: TEST_USER_ID,
+          source_info: {
+            source: "js_sdk",
+            version: PACKAGE_VERSION,
+          },
         })
       );
 
@@ -363,6 +368,76 @@ describe("Connection Types", () => {
       await expect(createConnection(config)).rejects.toThrow(
         "Unknown connection type: unknown"
       );
+    });
+
+    it("throws error when signedUrl is used with connectionType webrtc", async () => {
+      // @ts-expect-error Testing invalid config: signedUrl doesn't support webrtc
+      const config: SessionConfig = {
+        signedUrl: "wss://api.elevenlabs.io/voice/test",
+        connectionType: "webrtc",
+      };
+
+      await expect(createConnection(config)).rejects.toThrow(
+        "signedUrl only supports websocket connections"
+      );
+    });
+
+    it("defaults to webrtc when connectionType is not specified", async () => {
+      const config = {
+        agentId: "test-agent",
+      };
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 404,
+          statusText: "Not Found",
+        })
+      );
+
+      // Should attempt WebRTC (which fetches a conversation token)
+      await expect(createConnection(config)).rejects.toThrow(
+        "Failed to fetch conversation token for agent test-agent"
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it("defaults to websocket when textOnly is true and connectionType is not specified", async () => {
+      const server = new Server(
+        "wss://api.elevenlabs.io/v1/convai/conversation"
+      );
+      const clientPromise = new Promise<Client>((resolve, reject) => {
+        server.on("connection", (socket: Client) => {
+          resolve(socket);
+        });
+        server.on("error", reject);
+        setTimeout(() => reject(new Error("timeout")), 5000);
+      });
+
+      const config = {
+        agentId: "test-agent",
+        textOnly: true,
+      };
+
+      const connectionPromise = createConnection(config);
+      const client = await clientPromise;
+
+      client.send(
+        JSON.stringify({
+          type: "conversation_initiation_metadata",
+          conversation_initiation_metadata_event: {
+            conversation_id: CONVERSATION_ID,
+            agent_output_audio_format: OUTPUT_AUDIO_FORMAT,
+          },
+        })
+      );
+
+      const connection = await connectionPromise;
+      expect(connection).toBeDefined();
+      connection.close();
+      server.close();
     });
   });
 
@@ -599,13 +674,17 @@ describe("Volume Control", () => {
       close: vi.fn(() => Promise.resolve()),
     }));
 
-    globalThis.AudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: {
-        postMessage: vi.fn(),
-        onmessage: null,
-      },
-    }));
+    globalThis.AudioWorkletNode = vi.fn().mockImplementation(() => {
+      return {
+        connect: vi.fn(),
+        port: {
+          postMessage: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          start: vi.fn(),
+        },
+      };
+    });
 
     // Mock getUserMedia by mocking the mediaDevices property
     const mockMediaStream = {
@@ -746,10 +825,11 @@ describe("Volume Control", () => {
 
     const conversation = await conversationPromise;
 
-    // Setting volume on text conversation should not throw
+    // Setting volume on text conversation should throw
     expect(() => {
+      // @ts-expect-error setVolume doesn't take arguments for text conversations
       conversation.setVolume({ volume: 0.5 });
-    }).not.toThrow();
+    }).toThrow("setVolume is not supported in text conversations");
 
     await conversation.endSession();
     server.close();
@@ -1224,24 +1304,34 @@ describe("Device Change Default Device", () => {
     const conversation = await conversationPromise;
 
     // Test that changeInputDevice works without deviceId (uses default)
-    const inputResult = await conversation.changeInputDevice({
+    await conversation.changeInputDevice({
       sampleRate: 16000,
       format: "pcm",
       // No inputDeviceId provided - should use browser default
     });
-
-    expect(inputResult).toBeDefined();
-    expect(inputResult.inputStream).toBeDefined();
+    // Success - the device change completed without throwing
 
     // Test that changeOutputDevice works without deviceId (uses default)
-    const outputResult = await conversation.changeOutputDevice({
-      sampleRate: 16000,
-      format: "pcm",
-      // No outputDeviceId provided - should use browser default
-    });
-
-    expect(outputResult).toBeDefined();
-    expect(outputResult.audioElement).toBeDefined();
+    try {
+      await conversation.changeOutputDevice({
+        sampleRate: 16000,
+        format: "pcm",
+        // No outputDeviceId provided - should use browser default
+      });
+      // Success - the device change completed without throwing
+    } catch (error) {
+      // In headless browsers, setSinkId may fail with AbortError
+      // This is a known limitation of headless browser environments
+      if (error instanceof DOMException && error.name === "AbortError") {
+        console.warn(
+          "Failed to change device on existing output, recreating:",
+          error
+        );
+        // This is expected in headless environments - test passes
+      } else {
+        throw error; // Re-throw unexpected errors
+      }
+    }
 
     await conversation.endSession();
     server.close();
@@ -1346,8 +1436,6 @@ describe("Wake Lock", () => {
 
     expect(mockWakeLock.request).toHaveBeenCalledWith("screen");
 
-    expect(conversation.wakeLock).toBe(mockSentinel);
-
     await conversation.endSession();
     server.close();
   });
@@ -1388,9 +1476,6 @@ describe("Wake Lock", () => {
     // Verify wake lock was NOT requested
     expect(mockWakeLock.request).not.toHaveBeenCalled();
 
-    // Verify the conversation does not have a wake lock
-    expect(conversation.wakeLock).toBeNull();
-
     await conversation.endSession();
     server.close();
   });
@@ -1425,12 +1510,9 @@ describe("Wake Lock", () => {
 
     const conversation = await conversationPromise;
 
-    expect(conversation.wakeLock).toBe(mockSentinel);
-
     await conversation.endSession();
 
     expect(mockSentinel.release).toHaveBeenCalled();
-    expect(conversation.wakeLock).toBeNull();
 
     server.close();
   });
@@ -1488,7 +1570,6 @@ describe("Wake Lock", () => {
     await sleep(100);
 
     expect(requestCallCount).toBe(2);
-    expect(conversation.wakeLock).toBe(secondSentinel);
 
     await conversation.endSession();
     server.close();
