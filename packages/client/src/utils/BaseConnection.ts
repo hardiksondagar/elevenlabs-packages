@@ -48,6 +48,14 @@ export type BaseSessionConfig = {
   };
   customLlmExtraBody?: unknown;
   dynamicVariables?: Record<string, string | number | boolean>;
+  toolMockConfig?: {
+    /** Which tools to mock. Defaults to 'none'. */
+    mockingStrategy?: "none" | "all" | "selected";
+    /** Tool names to mock when mockingStrategy is 'selected'. */
+    mockedToolNames?: string[];
+    /** Behavior when mocked tool has no mock response. Defaults to 'raise_error'. */
+    fallbackStrategy?: "raise_error" | "call_real_tool";
+  };
   useWakeLock?: boolean;
   connectionDelay?: DelayConfig;
   textOnly?: boolean;
