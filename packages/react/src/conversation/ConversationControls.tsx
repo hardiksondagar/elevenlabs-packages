@@ -4,6 +4,7 @@ import {
   type FormatConfig,
   type InputDeviceConfig,
   type OutputConfig,
+  type MultimodalMessageInput,
 } from "@elevenlabs/client";
 import type { HookOptions } from "./types";
 import { ConversationContext } from "./ConversationContext";
@@ -14,6 +15,7 @@ export type ConversationControlsValue = {
   startSession: (options?: HookOptions) => void;
   endSession: () => void;
   sendUserMessage: (text: string) => void;
+  sendMultimodalMessage: (options: MultimodalMessageInput) => void;
   sendContextualUpdate: (text: string) => void;
   sendUserActivity: () => void;
   sendMCPToolApprovalResult: (
@@ -62,6 +64,13 @@ export function ConversationControlsProvider({
   const sendUserMessage = useCallback((text: string) => {
     getConversation().sendUserMessage(text);
   }, [getConversation]);
+
+  const sendMultimodalMessage = useCallback(
+    (options: MultimodalMessageInput) => {
+      getConversation().sendMultimodalMessage(options);
+    },
+    [getConversation]
+  );
 
   const sendContextualUpdate = useCallback((text: string) => {
     getConversation().sendContextualUpdate(text);
@@ -133,6 +142,7 @@ export function ConversationControlsProvider({
       startSession: ctx.startSession,
       endSession: ctx.endSession,
       sendUserMessage,
+      sendMultimodalMessage,
       sendContextualUpdate,
       sendUserActivity,
       sendMCPToolApprovalResult,
@@ -149,6 +159,7 @@ export function ConversationControlsProvider({
       ctx.startSession,
       ctx.endSession,
       sendUserMessage,
+      sendMultimodalMessage,
       sendContextualUpdate,
       sendUserActivity,
       sendMCPToolApprovalResult,
