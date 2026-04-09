@@ -480,6 +480,80 @@ describe("ConversationProvider", () => {
     expect(Conversation.startSession).toHaveBeenCalledTimes(1);
   });
 
+  it("calls onError when startSession rejects", async () => {
+    const onError = vi.fn();
+    vi.mocked(Conversation.startSession).mockRejectedValue(
+      new Error("agent not found")
+    );
+
+    const { result } = renderHook(() => useTestContext(), {
+      wrapper: createWrapper({ onError }),
+    });
+
+    await act(async () => {
+      result.current.startSession();
+    });
+
+    // The composed onError passed to Conversation.startSession should have been called
+    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
+    expect(opts.onError).toBeDefined();
+
+    // The user's onError prop should have been called with the error message
+    expect(onError).toHaveBeenCalledWith("agent not found", expect.any(Error));
+  });
+
+  it("allows new connection after a failed startSession", async () => {
+    vi.mocked(Conversation.startSession).mockRejectedValue(
+      new Error("agent not found")
+    );
+
+    const { result } = renderHook(() => useTestContext(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      result.current.startSession();
+    });
+
+    // lockRef should be cleared — a new connection should be possible
+    const mockConversation = createMockConversation();
+    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+
+    await act(async () => {
+      result.current.startSession();
+    });
+
+    expect(Conversation.startSession).toHaveBeenCalledTimes(2);
+    expect(result.current.conversation).toBe(mockConversation);
+  });
+
+  it("does not call onError when endSession is called before startSession rejects", async () => {
+    const onError = vi.fn();
+    const { promise, reject: rejectStartSession } =
+      Promise.withResolvers<Conversation>();
+    vi.mocked(Conversation.startSession).mockReturnValue(promise);
+
+    const { result } = renderHook(() => useTestContext(), {
+      wrapper: createWrapper({ onError }),
+    });
+
+    act(() => {
+      result.current.startSession();
+    });
+
+    // User intentionally ends before the connection settles
+    act(() => {
+      result.current.endSession();
+    });
+
+    await act(async () => {
+      rejectStartSession(new Error("connection failed"));
+    });
+
+    // onError should NOT fire — the user intentionally disconnected
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("passes stable callbacks that always call the latest prop value", async () => {
     const onConnect = vi.fn();
     const wrapper = ({ children }: React.PropsWithChildren) => (
