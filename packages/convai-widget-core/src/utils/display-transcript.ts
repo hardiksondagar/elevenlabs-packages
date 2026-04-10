@@ -132,10 +132,34 @@ export function buildDisplayTranscript(
     result.push(entry);
   }
 
+  // Sort message entries by eventId to fix ordering when server sends
+  // agent_response before user_transcript in voice mode.
+  // Only reorder entries that have an eventId; leave others in place.
+  const sortableIndices: number[] = [];
+  const sortableEntries: DisplayTranscriptEntry[] = [];
+  for (let i = 0; i < result.length; i++) {
+    const entry = result[i];
+    if (entry.type === "message" && entry.eventId != null) {
+      sortableIndices.push(i);
+      sortableEntries.push(entry);
+    }
+  }
+  sortableEntries.sort((a, b) => {
+    const aId = (a as Extract<DisplayTranscriptEntry, { type: "message" }>)
+      .eventId!;
+    const bId = (b as Extract<DisplayTranscriptEntry, { type: "message" }>)
+      .eventId!;
+    return aId - bId;
+  });
+  const sorted = [...result];
+  for (let i = 0; i < sortableIndices.length; i++) {
+    sorted[sortableIndices[i]] = sortableEntries[i];
+  }
+
   // Attach tool status to agent messages
   if (config.showAgentStatus) {
-    for (let i = 0; i < result.length; i++) {
-      const entry = result[i];
+    for (let i = 0; i < sorted.length; i++) {
+      const entry = sorted[i];
       if (
         entry.type !== "message" ||
         entry.role !== "agent" ||
@@ -151,9 +175,9 @@ export function buildDisplayTranscript(
           : status.error > 0
             ? ToolCallStatus.ERROR
             : ToolCallStatus.SUCCESS;
-      result[i] = { ...entry, toolStatus };
+      sorted[i] = { ...entry, toolStatus };
     }
   }
 
-  return result;
+  return sorted;
 }

@@ -293,6 +293,55 @@ describe("buildDisplayTranscript", () => {
     });
   });
 
+  describe("eventId sorting", () => {
+    it("reorders agent before user when agent_response arrives first in voice mode", () => {
+      const input = [
+        msg("agent", "Hello!", { eventId: 2, isText: false }),
+        msg("user", "Hi", { eventId: 1, isText: false }),
+      ];
+      const result = build(input);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({ role: "user", message: "Hi" });
+      expect(result[1]).toMatchObject({ role: "agent", message: "Hello!" });
+    });
+
+    it("preserves order when eventIds are already sequential", () => {
+      const input = [
+        msg("user", "Hi", { eventId: 1, isText: false }),
+        msg("agent", "Hello!", { eventId: 2, isText: false }),
+      ];
+      const result = build(input);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({ role: "user", message: "Hi" });
+      expect(result[1]).toMatchObject({ role: "agent", message: "Hello!" });
+    });
+
+    it("sorts correctly when non-message entries sit between misordered messages", () => {
+      const input: TranscriptEntry[] = [
+        msg("agent", "Hello!", { eventId: 2, isText: false }),
+        { type: "mode_toggle", mode: "text", conversationIndex: 0 },
+        msg("user", "Hi", { eventId: 1, isText: false }),
+      ];
+      const result = build(input);
+      expect(result).toHaveLength(3);
+      // Messages with eventId are reordered; mode_toggle stays in place
+      expect(result[0]).toMatchObject({ role: "user", message: "Hi" });
+      expect(result[1]).toMatchObject({ type: "mode_toggle" });
+      expect(result[2]).toMatchObject({ role: "agent", message: "Hello!" });
+    });
+
+    it("keeps entries without eventId in their original position", () => {
+      const input = [
+        msg("user", "typed", { isText: true }),
+        msg("agent", "response", { eventId: 5, isText: true }),
+      ];
+      const result = build(input);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({ role: "user", message: "typed" });
+      expect(result[1]).toMatchObject({ role: "agent", message: "response" });
+    });
+  });
+
   describe("real HAR flows", () => {
     it.each<{
       description: string;
