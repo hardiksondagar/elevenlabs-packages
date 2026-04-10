@@ -4,6 +4,10 @@ import { isIosDevice } from "./compatibility.js";
 import type { AudioWorkletConfig } from "../BaseConversation.js";
 import { addLibsamplerateModule } from "./addLibsamplerateModule.js";
 import type { InputController, InputDeviceConfig } from "../InputController.js";
+import {
+  createAnalyserVolumeProvider,
+  type VolumeProvider,
+} from "./volumeProvider.js";
 
 export type InputConfig = InputDeviceConfig & {
   onError?(message: string, context?: unknown): void;
@@ -130,6 +134,7 @@ export class MediaDeviceInput implements InputController, InputEventTarget {
   }
 
   private muted = false;
+  private readonly volumeProvider: VolumeProvider;
 
   private constructor(
     private readonly context: AudioContext,
@@ -147,10 +152,27 @@ export class MediaDeviceInput implements InputController, InputEventTarget {
     // Start the MessagePort to enable addEventListener to work
     // (required when using addEventListener instead of onmessage)
     this.worklet.port.start();
+    this.volumeProvider = createAnalyserVolumeProvider(
+      analyser,
+      context.sampleRate
+    );
   }
 
   public getAnalyser(): AnalyserNode {
     return this.analyser;
+  }
+
+  public getVolume(): number {
+    if (this.muted) return 0;
+    return this.volumeProvider.getVolume();
+  }
+
+  public getByteFrequencyData(buffer: Uint8Array<ArrayBuffer>): void {
+    if (this.muted) {
+      buffer.fill(0);
+      return;
+    }
+    this.volumeProvider.getByteFrequencyData(buffer);
   }
 
   public isMuted(): boolean {

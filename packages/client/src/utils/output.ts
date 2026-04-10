@@ -6,6 +6,10 @@ import type {
   OutputController,
   OutputDeviceConfig,
 } from "../OutputController.js";
+import {
+  createAnalyserVolumeProvider,
+  type VolumeProvider,
+} from "./volumeProvider.js";
 
 export type OutputConfig = OutputDeviceConfig;
 
@@ -121,6 +125,7 @@ export class MediaDeviceOutput
   private volume = 1;
   private interrupted = false;
   private interruptTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly volumeProvider: VolumeProvider;
 
   private constructor(
     private readonly context: AudioContext,
@@ -132,10 +137,22 @@ export class MediaDeviceOutput
     // Start the MessagePort to enable addEventListener to work
     // (required when using addEventListener instead of onmessage)
     this.worklet.port.start();
+    this.volumeProvider = createAnalyserVolumeProvider(
+      analyser,
+      context.sampleRate
+    );
   }
 
   public getAnalyser(): AnalyserNode {
     return this.analyser;
+  }
+
+  public getVolume(): number {
+    return this.volumeProvider.getVolume();
+  }
+
+  public getByteFrequencyData(buffer: Uint8Array<ArrayBuffer>): void {
+    this.volumeProvider.getByteFrequencyData(buffer);
   }
 
   public addListener(listener: PlaybackListener): void {
