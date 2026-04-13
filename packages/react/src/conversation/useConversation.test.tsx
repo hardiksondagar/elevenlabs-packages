@@ -1,7 +1,11 @@
 import React from "react";
 import { it, expect, describe, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { Conversation } from "@elevenlabs/client";
+import {
+  Conversation,
+  type Callbacks,
+  type ConversationLifecycleOptions,
+} from "@elevenlabs/client";
 import { useConversation } from "./useConversation.js";
 import { ConversationProvider } from "./ConversationProvider.js";
 
@@ -34,6 +38,29 @@ function createWrapper(props: Record<string, unknown> = {}) {
       <ConversationProvider {...props}>{children}</ConversationProvider>
     );
   };
+}
+
+type MockStartSessionOptions = Partial<Callbacks & ConversationLifecycleOptions> &
+  Record<string, unknown>;
+
+function driveConnectedSessionLifecycle(
+  options: MockStartSessionOptions,
+  conversation: Conversation
+) {
+  options.onConversationCreated?.(conversation);
+  options.onStatusChange?.({ status: "connected" });
+  options.onConnect?.({ conversationId: conversation.getId() });
+}
+
+function mockStartSessionWithLifecycle(conversation = createMockConversation()) {
+  vi.mocked(Conversation.startSession).mockImplementation(async options => {
+    driveConnectedSessionLifecycle(
+      options as MockStartSessionOptions,
+      conversation
+    );
+    return conversation;
+  });
+  return conversation;
 }
 
 describe("useConversation", () => {
@@ -164,8 +191,7 @@ describe("useConversation", () => {
   it("registers hook callbacks so they are invoked during a session", async () => {
     const onConnect = vi.fn();
     const onError = vi.fn();
-    const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+    mockStartSessionWithLifecycle();
 
     const { result } = renderHook(
       () => useConversation({ onConnect, onError }),
@@ -176,20 +202,19 @@ describe("useConversation", () => {
       result.current.startSession({ signedUrl: "wss://test.example.com" });
     });
 
-    // Invoke the callbacks that were passed to Conversation.startSession
-    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
-    opts.onConnect!({ conversationId: "test-id" });
-    opts.onError!("something went wrong", { type: "unknown" });
-
+    // onConnect is forwarded through the provider-owned wrapper.
     expect(onConnect).toHaveBeenCalledWith({ conversationId: "test-id" });
+
+    // onError is still passed through to the SDK — invoke it manually
+    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
+    opts.onError!("something went wrong", { type: "unknown" });
     expect(onError).toHaveBeenCalledWith("something went wrong", { type: "unknown" });
   });
 
   it("composes hook callbacks with provider callbacks", async () => {
     const providerOnConnect = vi.fn();
     const hookOnConnect = vi.fn();
-    const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+    mockStartSessionWithLifecycle();
 
     const { result } = renderHook(
       () => useConversation({ onConnect: hookOnConnect }),
@@ -200,17 +225,14 @@ describe("useConversation", () => {
       result.current.startSession({ signedUrl: "wss://test.example.com" });
     });
 
-    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
-    opts.onConnect!({ conversationId: "test-id" });
-
+    // onConnect is forwarded through the provider-owned wrapper.
     expect(providerOnConnect).toHaveBeenCalledWith({ conversationId: "test-id" });
     expect(hookOnConnect).toHaveBeenCalledWith({ conversationId: "test-id" });
   });
 
   it("composes hook, provider, and startSession callbacks together", async () => {
     const calls: string[] = [];
-    const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+    mockStartSessionWithLifecycle();
 
     const { result } = renderHook(
       () => useConversation({ onConnect: () => calls.push("hook") }),
@@ -224,9 +246,7 @@ describe("useConversation", () => {
       });
     });
 
-    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
-    opts.onConnect!({ conversationId: "test-id" });
-
+    // onConnect is forwarded through the provider-owned wrapper.
     expect(calls).toContain("provider");
     expect(calls).toContain("hook");
     expect(calls).toContain("startSession");
@@ -235,7 +255,11 @@ describe("useConversation", () => {
   it("always invokes the latest hook callback (no stale closures)", async () => {
     const calls: string[] = [];
     const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+
+    // Use a deferred promise so we can rerender before resolving
+    const { promise, resolve: resolveStartSession } =
+      Promise.withResolvers<typeof mockConversation>();
+    vi.mocked(Conversation.startSession).mockReturnValue(promise);
 
     const { result, rerender } = renderHook(
       ({ cb }: { cb: () => void }) => useConversation({ onConnect: cb }),
@@ -245,16 +269,26 @@ describe("useConversation", () => {
       },
     );
 
-    await act(async () => {
+    act(() => {
       result.current.startSession({ signedUrl: "wss://test.example.com" });
     });
 
-    // Update the callback after the session has started
+    // Update the callback before the session resolves
     rerender({ cb: () => calls.push("second") });
 
     const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
-    opts.onConnect!({ conversationId: "test-id" });
+    act(() => {
+      driveConnectedSessionLifecycle(
+        opts as MockStartSessionOptions,
+        mockConversation
+      );
+    });
 
+    await act(async () => {
+      resolveStartSession(mockConversation);
+    });
+
+    // Should invoke the latest callback, not the stale one
     expect(calls).toEqual(["second"]);
   });
 
@@ -306,9 +340,14 @@ describe("useConversation", () => {
       result.current.startSession();
     });
 
-    // agentId should be forwarded, but onConnect should not appear
-    // as a raw prop — it's registered via useRegisterCallbacks instead
+    // agentId should be forwarded, and the provider should wrap onConnect while
+    // still registering the hook callback via useRegisterCallbacks.
     const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
     expect(opts.agentId).toBe("hook-agent-id");
+    expect(typeof opts.onConnect).toBe("function");
+    expect(opts.onConnect).not.toBe(onConnect);
+    expect(
+      typeof (opts as MockStartSessionOptions).onConversationCreated
+    ).toBe("function");
   });
 });

@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React, { useContext } from "react";
 import { renderHook, act } from "@testing-library/react";
-import { Conversation, type Callbacks } from "@elevenlabs/client";
+import {
+  Conversation,
+  type Callbacks,
+  type ConversationLifecycleOptions,
+} from "@elevenlabs/client";
 import { CALLBACK_KEYS } from "@elevenlabs/client/internal";
 import { ConversationProvider } from "./ConversationProvider.js";
 import {
@@ -32,6 +36,7 @@ const createMockConversation = (id = "test-id") =>
     endSession: vi.fn().mockResolvedValue(undefined),
     setMicMuted: vi.fn(),
     setVolume: vi.fn(),
+    sendUserMessage: vi.fn(),
   }) as unknown as Conversation;
 
 function createWrapper(props: Record<string, unknown> = {}) {
@@ -42,6 +47,29 @@ function createWrapper(props: Record<string, unknown> = {}) {
       </ConversationProvider>
     );
   };
+}
+
+type MockStartSessionOptions = Partial<Callbacks & ConversationLifecycleOptions> &
+  Record<string, unknown>;
+
+function driveConnectedSessionLifecycle(
+  options: MockStartSessionOptions,
+  conversation: Conversation
+) {
+  options.onConversationCreated?.(conversation);
+  options.onStatusChange?.({ status: "connected" });
+  options.onConnect?.({ conversationId: conversation.getId() });
+}
+
+function mockStartSessionWithLifecycle(conversation = createMockConversation()) {
+  vi.mocked(Conversation.startSession).mockImplementation(async options => {
+    driveConnectedSessionLifecycle(
+      options as MockStartSessionOptions,
+      conversation
+    );
+    return conversation;
+  });
+  return conversation;
 }
 
 describe("ConversationProvider", () => {
@@ -226,8 +254,7 @@ describe("ConversationProvider", () => {
     const propCalls: string[] = [];
     const sessionCalls: string[] = [];
 
-    const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+    mockStartSessionWithLifecycle();
 
     const { result } = renderHook(() => useTestContext(), {
       wrapper: createWrapper({
@@ -241,10 +268,7 @@ describe("ConversationProvider", () => {
       });
     });
 
-    // Invoke the composed onConnect that was passed to startSession
-    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
-    opts.onConnect!({ conversationId: "test-id" });
-
+    // onConnect is forwarded through the provider-owned wrapper.
     expect(propCalls).toEqual(["prop"]);
     expect(sessionCalls).toEqual(["session"]);
   });
@@ -252,8 +276,7 @@ describe("ConversationProvider", () => {
   it("calls only the prop callback when startSession provides none", async () => {
     const propCalls: string[] = [];
 
-    const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+    mockStartSessionWithLifecycle();
 
     const { result } = renderHook(() => useTestContext(), {
       wrapper: createWrapper({
@@ -265,17 +288,13 @@ describe("ConversationProvider", () => {
       result.current.startSession();
     });
 
-    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
-    opts.onConnect!({ conversationId: "test-id" });
-
     expect(propCalls).toEqual(["prop"]);
   });
 
   it("calls only the startSession callback when no prop callback is set", async () => {
     const sessionCalls: string[] = [];
 
-    const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+    mockStartSessionWithLifecycle();
 
     const { result } = renderHook(() => useTestContext(), {
       wrapper: createWrapper(),
@@ -286,9 +305,6 @@ describe("ConversationProvider", () => {
         onConnect: () => sessionCalls.push("session"),
       });
     });
-
-    const [[opts]] = vi.mocked(Conversation.startSession).mock.calls;
-    opts.onConnect!({ conversationId: "test-id" });
 
     expect(sessionCalls).toEqual(["session"]);
   });
@@ -562,10 +578,7 @@ describe("ConversationProvider", () => {
       </ConversationProvider>
     );
 
-    // We test the stable callback pattern by checking that
-    // Conversation.startSession is called with callbacks
-    const mockConversation = createMockConversation();
-    vi.mocked(Conversation.startSession).mockResolvedValue(mockConversation);
+    mockStartSessionWithLifecycle();
 
     const { result } = renderHook(() => useTestContext(), {
       wrapper,
@@ -575,14 +588,234 @@ describe("ConversationProvider", () => {
       result.current.startSession();
     });
 
-    // Verify Conversation.startSession was called with the provided callback
     const startSessionCall = vi.mocked(Conversation.startSession).mock
       .calls[0][0];
+    // onConnect is wrapped by the provider and forwarded through the SDK.
     expect(typeof startSessionCall.onConnect).toBe("function");
+    expect(
+      typeof (startSessionCall as MockStartSessionOptions).onConversationCreated
+    ).toBe("function");
     // onDisconnect is registered internally by the provider
     expect(typeof startSessionCall.onDisconnect).toBe("function");
     // Unprovided callbacks are omitted so client feature guards work
     expect(startSessionCall.onUnhandledClientToolCall).toBeUndefined();
+    // onConnect should still have been called
+    expect(onConnect).toHaveBeenCalledWith({ conversationId: "test-id" });
+  });
+
+  it("can send a message from onConnect without throwing", async () => {
+    const mockConversation = createMockConversation();
+
+    vi.mocked(Conversation.startSession).mockImplementation(async opts => {
+      driveConnectedSessionLifecycle(
+        opts as MockStartSessionOptions,
+        mockConversation
+      );
+      return mockConversation;
+    });
+
+    const onConnectError = vi.fn();
+
+    function useTestHarness() {
+      const ctx = useContext(ConversationContext)!;
+      return {
+        startSession: () =>
+          ctx.startSession({
+            onConnect: () => {
+              try {
+                const conv = ctx.conversationRef.current;
+                conv!.sendUserMessage("hello");
+              } catch (e) {
+                onConnectError(e);
+              }
+            },
+          }),
+      };
+    }
+
+    const { result } = renderHook(() => useTestHarness(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      result.current.startSession();
+    });
+
+    expect(onConnectError).not.toHaveBeenCalled();
+    expect(mockConversation.sendUserMessage).toHaveBeenCalledWith("hello");
+  });
+
+  it("clears the active conversation when onConnect throws", async () => {
+    const mockConversation = createMockConversation();
+    const onError = vi.fn();
+
+    vi.mocked(Conversation.startSession).mockImplementation(async opts => {
+      driveConnectedSessionLifecycle(
+        opts as MockStartSessionOptions,
+        mockConversation
+      );
+      return mockConversation;
+    });
+
+    const { result } = renderHook(() => useTestContext(), {
+      wrapper: createWrapper({ onError }),
+    });
+
+    await act(async () => {
+      result.current.startSession({
+        onConnect: () => {
+          throw new Error("boom");
+        },
+      });
+    });
+
+    expect(onError).toHaveBeenCalledWith("boom", expect.any(Error));
+    expect(result.current.conversation).toBeNull();
+  });
+
+  it("forwards user onConversationCreated after provider sets conversationRef", async () => {
+    const mockConversation = createMockConversation();
+    const userOnConversationCreated = vi.fn();
+
+    vi.mocked(Conversation.startSession).mockImplementation(async opts => {
+      driveConnectedSessionLifecycle(
+        opts as MockStartSessionOptions,
+        mockConversation
+      );
+      return mockConversation;
+    });
+
+    const { result } = renderHook(() => useTestContext(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      result.current.startSession({
+        onConversationCreated(conv) {
+          userOnConversationCreated(
+            conv,
+            result.current.conversationRef.current
+          );
+        },
+      });
+    });
+
+    expect(userOnConversationCreated).toHaveBeenCalledTimes(1);
+    expect(userOnConversationCreated).toHaveBeenCalledWith(
+      mockConversation,
+      mockConversation
+    );
+  });
+
+  it("ignores stale startSession resolution after restarting inside onConnect", async () => {
+    const firstConversation = createMockConversation("first-id");
+    const secondConversation = createMockConversation("second-id");
+    const { promise: firstPromise, resolve: resolveFirst } =
+      Promise.withResolvers<Conversation>();
+    const { promise: secondPromise, resolve: resolveSecond } =
+      Promise.withResolvers<Conversation>();
+    let firstOptions: MockStartSessionOptions | null = null;
+    let secondOptions: MockStartSessionOptions | null = null;
+
+    vi.mocked(Conversation.startSession).mockImplementation(options => {
+      if (!firstOptions) {
+        firstOptions = options as MockStartSessionOptions;
+        return firstPromise;
+      }
+      secondOptions = options as MockStartSessionOptions;
+      return secondPromise;
+    });
+
+    const { result } = renderHook(() => useTestContext(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.startSession({
+        onConnect: () => {
+          result.current.endSession();
+          result.current.startSession();
+        },
+      });
+    });
+
+    act(() => {
+      driveConnectedSessionLifecycle(firstOptions!, firstConversation);
+    });
+
+    expect(Conversation.startSession).toHaveBeenCalledTimes(2);
+    expect(result.current.conversation).toBeNull();
+
+    act(() => {
+      driveConnectedSessionLifecycle(secondOptions!, secondConversation);
+    });
+
+    expect(result.current.conversation).toBe(secondConversation);
+
+    await act(async () => {
+      resolveFirst(firstConversation);
+    });
+
+    expect(result.current.conversation).toBe(secondConversation);
+
+    await act(async () => {
+      resolveSecond(secondConversation);
+    });
+
+    expect(result.current.conversation).toBe(secondConversation);
+  });
+
+  it("ignores stale startSession rejection after restarting inside onConnect", async () => {
+    const onError = vi.fn();
+    const firstConversation = createMockConversation("first-id");
+    const secondConversation = createMockConversation("second-id");
+    const firstError = new Error("first failed");
+    const { promise: firstPromise, reject: rejectFirst } =
+      Promise.withResolvers<Conversation>();
+    const { promise: secondPromise, resolve: resolveSecond } =
+      Promise.withResolvers<Conversation>();
+    let firstOptions: MockStartSessionOptions | null = null;
+    let secondOptions: MockStartSessionOptions | null = null;
+
+    vi.mocked(Conversation.startSession).mockImplementation(options => {
+      if (!firstOptions) {
+        firstOptions = options as MockStartSessionOptions;
+        return firstPromise;
+      }
+      secondOptions = options as MockStartSessionOptions;
+      return secondPromise;
+    });
+
+    const { result } = renderHook(() => useTestContext(), {
+      wrapper: createWrapper({ onError }),
+    });
+
+    act(() => {
+      result.current.startSession({
+        onConnect: () => {
+          result.current.endSession();
+          result.current.startSession();
+        },
+      });
+    });
+
+    act(() => {
+      driveConnectedSessionLifecycle(firstOptions!, firstConversation);
+      driveConnectedSessionLifecycle(secondOptions!, secondConversation);
+    });
+
+    expect(result.current.conversation).toBe(secondConversation);
+
+    await act(async () => {
+      rejectFirst(firstError);
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(result.current.conversation).toBe(secondConversation);
+
+    await act(async () => {
+      resolveSecond(secondConversation);
+    });
   });
 });
 

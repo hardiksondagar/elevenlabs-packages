@@ -6,7 +6,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { Conversation, type Options, type Callbacks } from "@elevenlabs/client";
+import {
+  Conversation,
+  type Options,
+  type Callbacks,
+  type ConversationLifecycleOptions,
+} from "@elevenlabs/client";
 import {
   CALLBACK_KEYS,
   mergeOptions,
@@ -62,6 +67,8 @@ export function ConversationProvider({
   const conversationRef = useRef<Conversation | null>(null);
   /** In-flight startSession promise, used to prevent duplicate connections. */
   const lockRef = useRef<Promise<Conversation> | null>(null);
+  /** Monotonic id used to ignore stale async handlers from older starts. */
+  const startSessionIdRef = useRef(0);
   /** Signals that endSession was called while a connection was still pending. */
   const shouldEndRef = useRef(false);
   /** Registry of hook-registered client tools. Survives across sessions. */
@@ -112,6 +119,7 @@ export function ConversationProvider({
       }
 
       shouldEndRef.current = false;
+      const startSessionId = ++startSessionIdRef.current;
 
       const defaults = defaultOptionsRef.current;
       const resolvedServerLocation = parseLocation(
@@ -145,20 +153,62 @@ export function ConversationProvider({
       clientToolsRef.current = clientTools;
       sessionOptions.clientTools = clientTools;
 
-      lockRef.current = Conversation.startSession(sessionOptions);
+      const userOnConversationCreated = sessionOptions.onConversationCreated;
+      const isStaleStartSession = () =>
+        startSessionId !== startSessionIdRef.current;
+
+      const handleConversationCreated = (conv: Conversation) => {
+        if (shouldEndRef.current || isStaleStartSession()) {
+          return;
+        }
+        conversationRef.current = conv;
+        setConversation(conv);
+        userOnConversationCreated?.(conv);
+      };
+
+      const handleConnect: NonNullable<Callbacks["onConnect"]> = props => {
+        if (shouldEndRef.current || isStaleStartSession()) {
+          return;
+        }
+        lockRef.current = null;
+        sessionOptions.onConnect?.(props);
+      };
+
+      const providerLifecycleOptions: ConversationLifecycleOptions &
+        Pick<Callbacks, "onConnect"> = {
+        onConversationCreated: handleConversationCreated,
+        onConnect: handleConnect,
+      };
+
+      const startSessionOptions: Options = {
+        ...sessionOptions,
+        ...providerLifecycleOptions,
+      };
+
+      lockRef.current = Conversation.startSession(startSessionOptions);
 
       lockRef.current.then(
         conv => {
+          if (isStaleStartSession()) {
+            return;
+          }
           if (shouldEndRef.current) {
             conv.endSession();
             lockRef.current = null;
             return;
           }
-          conversationRef.current = conv;
-          setConversation(conv);
+          if (conversationRef.current !== conv) {
+            conversationRef.current = conv;
+            setConversation(conv);
+          }
           lockRef.current = null;
         },
         (error: unknown) => {
+          if (isStaleStartSession()) {
+            return;
+          }
+          conversationRef.current = null;
+          setConversation(null);
           lockRef.current = null;
           if (shouldEndRef.current) {
             return;
