@@ -445,6 +445,7 @@ export function useScribe(options: ScribeHookOptions = {}): UseScribeReturn {
 
         connection.on(RealtimeEvents.CLOSE, () => {
           setStatus("disconnected");
+          setIsMuted(false);
           connectionRef.current = null;
           onDisconnect?.();
         });
@@ -496,6 +497,7 @@ export function useScribe(options: ScribeHookOptions = {}): UseScribeReturn {
     connectionRef.current?.close();
     connectionRef.current = null;
     setStatus("disconnected");
+    setIsMuted(false);
   }, []);
 
   const mute = useCallback(() => {
