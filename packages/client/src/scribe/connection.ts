@@ -207,24 +207,26 @@ export class RealtimeConnection {
   }
 
   /**
-   * Whether audio sending is currently muted.
+   * Whether audio capture is currently muted.
    *
    * In microphone mode, the underlying `MediaStreamTrack` is disabled so the
-   * browser captures silence instead of real microphone input.
-   * In manual mode, calls to `send()` are silently discarded while muted.
+   * browser captures silence instead of real microphone input. Silence continues
+   * to be sent to the server to keep the connection alive.
    */
   public get isMuted(): boolean {
     return this._muted;
   }
 
   /**
-   * Mutes audio capture and transmission.
+   * Mutes audio capture.
    *
    * In microphone mode, disables the underlying `MediaStreamTrack` so the browser
-   * stops delivering real audio to the worklet. Combined with the worklet-level
-   * guard in `scribe.ts`, no audio chunks reach the server while muted.
+   * replaces real microphone input with silence. The silence continues to flow to
+   * the server, keeping the connection alive without producing transcriptions.
    *
-   * In manual mode, subsequent `send()` calls are silently discarded until `unmute()`.
+   * In manual mode, sets the `isMuted` flag so callers can check it before sending.
+   * `send()` itself is not blocked — this avoids accidentally starving the server
+   * of keepalive data.
    */
   public mute(): void {
     this._muted = true;
@@ -234,10 +236,10 @@ export class RealtimeConnection {
   }
 
   /**
-   * Unmutes audio capture and transmission.
+   * Unmutes audio capture.
    *
-   * Re-enables the `MediaStreamTrack` (microphone mode) or allows `send()` calls
-   * to pass through again (manual mode).
+   * Re-enables the `MediaStreamTrack` so real microphone audio flows again
+   * (microphone mode), or clears the `isMuted` flag (manual mode).
    */
   public unmute(): void {
     this._muted = false;
@@ -462,10 +464,6 @@ export class RealtimeConnection {
   }): void {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
       throw new Error("WebSocket is not connected");
-    }
-
-    if (this._muted) {
-      return;
     }
 
     const message: InputAudioChunk = {

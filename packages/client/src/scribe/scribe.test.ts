@@ -714,7 +714,7 @@ describe("Scribe", () => {
       connection.close();
     });
 
-    it("send() is a no-op when muted", async () => {
+    it("send() still forwards audio when muted (silence kept flowing to avoid server timeout)", async () => {
       const server = new Server(
         "wss://api.elevenlabs.io/v1/speech-to-text/realtime?model_id=scribe_v2_realtime&token=sutkn_123"
       );
@@ -738,45 +738,6 @@ describe("Scribe", () => {
       await sleep(100);
 
       connection.mute();
-      connection.send({ audioBase64: "dGVzdA==" });
-
-      await sleep(100);
-      expect(onMessageSend).not.toHaveBeenCalled();
-
-      connection.close();
-      server.close();
-    });
-
-    it("send() resumes after unmute()", async () => {
-      const server = new Server(
-        "wss://api.elevenlabs.io/v1/speech-to-text/realtime?model_id=scribe_v2_realtime&token=sutkn_123"
-      );
-      const clientPromise = new Promise<Client>((resolve, reject) => {
-        server.on("connection", socket => resolve(socket));
-        server.on("error", reject);
-        setTimeout(() => reject(new Error("timeout")), 5000);
-      });
-
-      const connection = Scribe.connect({
-        token: TEST_TOKEN,
-        modelId: TEST_MODEL_ID,
-        audioFormat: AudioFormat.PCM_16000,
-        sampleRate: 16000,
-      });
-
-      const client = await clientPromise;
-      const onMessageSend = vi.fn();
-      client.on("message", onMessageSend);
-
-      await sleep(100);
-
-      connection.mute();
-      connection.send({ audioBase64: "dGVzdA==" });
-
-      await sleep(50);
-      expect(onMessageSend).not.toHaveBeenCalled();
-
-      connection.unmute();
       connection.send({ audioBase64: "dGVzdA==" });
 
       await sleep(100);

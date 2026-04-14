@@ -297,9 +297,6 @@ export class ScribeRealtime {
 
       // Handle audio data from worklet
       scribeNode.port.onmessage = event => {
-        if (connection.isMuted) {
-          return;
-        }
         const { audioData } = event.data;
         // Convert ArrayBuffer to base64
         const bytes = new Uint8Array(audioData);
