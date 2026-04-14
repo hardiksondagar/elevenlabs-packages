@@ -200,7 +200,7 @@ export class RealtimeConnection {
   private _muted: boolean = false;
   public _audioCleanup?: () => void;
   /** @internal Set by ScribeRealtime in microphone mode to enable track-level muting. */
-  public _mediaStreamTracks?: MediaStreamTrack[];
+  public _mediaStreamTrack?: MediaStreamTrack;
 
   constructor(sampleRate: number) {
     this.currentSampleRate = sampleRate;
@@ -228,10 +228,8 @@ export class RealtimeConnection {
    */
   public mute(): void {
     this._muted = true;
-    if (this._mediaStreamTracks) {
-      for (const track of this._mediaStreamTracks) {
-        track.enabled = false;
-      }
+    if (this._mediaStreamTrack) {
+      this._mediaStreamTrack.enabled = false;
     }
   }
 
@@ -243,10 +241,8 @@ export class RealtimeConnection {
    */
   public unmute(): void {
     this._muted = false;
-    if (this._mediaStreamTracks) {
-      for (const track of this._mediaStreamTracks) {
-        track.enabled = true;
-      }
+    if (this._mediaStreamTrack) {
+      this._mediaStreamTrack.enabled = true;
     }
   }
 

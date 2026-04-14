@@ -287,13 +287,12 @@ export class ScribeRealtime {
         });
       }
 
-      // Store tracks so mute()/unmute() can toggle track.enabled.
+      // Store the track so mute()/unmute() can toggle track.enabled.
       // If mute() was called before mic setup finished, honour that state now.
-      connection._mediaStreamTracks = stream.getAudioTracks();
-      if (connection.isMuted) {
-        for (const track of connection._mediaStreamTracks) {
-          track.enabled = false;
-        }
+      const [audioTrack] = stream.getAudioTracks();
+      connection._mediaStreamTrack = audioTrack;
+      if (connection.isMuted && audioTrack) {
+        audioTrack.enabled = false;
       }
 
       // Handle audio data from worklet
