@@ -197,10 +197,57 @@ export class RealtimeConnection {
   private websocket: WebSocket | null = null;
   private eventEmitter: EventEmitter = new EventEmitter();
   private currentSampleRate: number = 16000;
+  private _muted: boolean = false;
   public _audioCleanup?: () => void;
+  /** @internal Set by ScribeRealtime in microphone mode to enable track-level muting. */
+  public _mediaStreamTracks?: MediaStreamTrack[];
 
   constructor(sampleRate: number) {
     this.currentSampleRate = sampleRate;
+  }
+
+  /**
+   * Whether audio sending is currently muted.
+   *
+   * In microphone mode, the underlying `MediaStreamTrack` is disabled so the
+   * browser captures silence instead of real microphone input.
+   * In manual mode, calls to `send()` are silently discarded while muted.
+   */
+  public get isMuted(): boolean {
+    return this._muted;
+  }
+
+  /**
+   * Mutes audio capture and transmission.
+   *
+   * In microphone mode, disables the underlying `MediaStreamTrack` so the browser
+   * stops delivering real audio to the worklet. Combined with the worklet-level
+   * guard in `scribe.ts`, no audio chunks reach the server while muted.
+   *
+   * In manual mode, subsequent `send()` calls are silently discarded until `unmute()`.
+   */
+  public mute(): void {
+    this._muted = true;
+    if (this._mediaStreamTracks) {
+      for (const track of this._mediaStreamTracks) {
+        track.enabled = false;
+      }
+    }
+  }
+
+  /**
+   * Unmutes audio capture and transmission.
+   *
+   * Re-enables the `MediaStreamTrack` (microphone mode) or allows `send()` calls
+   * to pass through again (manual mode).
+   */
+  public unmute(): void {
+    this._muted = false;
+    if (this._mediaStreamTracks) {
+      for (const track of this._mediaStreamTracks) {
+        track.enabled = true;
+      }
+    }
   }
 
   /**
@@ -419,6 +466,10 @@ export class RealtimeConnection {
   }): void {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
       throw new Error("WebSocket is not connected");
+    }
+
+    if (this._muted) {
+      return;
     }
 
     const message: InputAudioChunk = {

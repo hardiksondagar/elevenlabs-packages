@@ -287,8 +287,14 @@ export class ScribeRealtime {
         });
       }
 
+      // Store tracks so mute()/unmute() can toggle track.enabled
+      connection._mediaStreamTracks = stream.getAudioTracks();
+
       // Handle audio data from worklet
       scribeNode.port.onmessage = event => {
+        if (connection.isMuted) {
+          return;
+        }
         const { audioData } = event.data;
         // Convert ArrayBuffer to base64
         const bytes = new Uint8Array(audioData);

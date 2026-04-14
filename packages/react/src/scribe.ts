@@ -120,6 +120,7 @@ export interface UseScribeReturn {
   status: ScribeStatus;
   isConnected: boolean;
   isTranscribing: boolean;
+  isMuted: boolean;
   partialTranscript: string;
   committedTranscripts: TranscriptSegment[];
   error: string | null;
@@ -127,6 +128,10 @@ export interface UseScribeReturn {
   // Connection methods
   connect: (options?: Partial<ScribeHookOptions>) => Promise<void>;
   disconnect: () => void;
+
+  // Mute / unmute
+  mute: () => void;
+  unmute: () => void;
 
   // Audio methods (for manual mode)
   sendAudio: (
@@ -191,6 +196,7 @@ export function useScribe(options: ScribeHookOptions = {}): UseScribeReturn {
   const connectionRef = useRef<RealtimeConnection | null>(null);
 
   const [status, setStatus] = useState<ScribeStatus>("disconnected");
+  const [isMuted, setIsMuted] = useState<boolean>(false);
   const [partialTranscript, setPartialTranscript] = useState<string>("");
   const [committedTranscripts, setCommittedTranscripts] = useState<
     TranscriptSegment[]
@@ -492,6 +498,22 @@ export function useScribe(options: ScribeHookOptions = {}): UseScribeReturn {
     setStatus("disconnected");
   }, []);
 
+  const mute = useCallback(() => {
+    if (!connectionRef.current) {
+      throw new Error("Not connected to Scribe");
+    }
+    connectionRef.current.mute();
+    setIsMuted(true);
+  }, []);
+
+  const unmute = useCallback(() => {
+    if (!connectionRef.current) {
+      throw new Error("Not connected to Scribe");
+    }
+    connectionRef.current.unmute();
+    setIsMuted(false);
+  }, []);
+
   const sendAudio = useCallback(
     (
       audioBase64: string,
@@ -533,6 +555,7 @@ export function useScribe(options: ScribeHookOptions = {}): UseScribeReturn {
     status,
     isConnected: status === "connected" || status === "transcribing",
     isTranscribing: status === "transcribing",
+    isMuted,
     partialTranscript,
     committedTranscripts,
     error,
@@ -540,6 +563,8 @@ export function useScribe(options: ScribeHookOptions = {}): UseScribeReturn {
     // Methods
     connect,
     disconnect,
+    mute,
+    unmute,
     sendAudio,
     commit,
     clearTranscripts,
