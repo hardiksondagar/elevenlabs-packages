@@ -212,6 +212,9 @@ export class RealtimeConnection {
    * In microphone mode, the underlying `MediaStreamTrack` is disabled so the
    * browser captures silence instead of real microphone input. Silence continues
    * to be sent to the server to keep the connection alive.
+   *
+   * In manual mode, this flag is informational only and does not automatically
+   * block `send()`.
    */
   public get isMuted(): boolean {
     return this._muted;
@@ -224,9 +227,8 @@ export class RealtimeConnection {
    * replaces real microphone input with silence. The silence continues to flow to
    * the server, keeping the connection alive without producing transcriptions.
    *
-   * In manual mode, sets the `isMuted` flag so callers can check it before sending.
-   * `send()` itself is not blocked — this avoids accidentally starving the server
-   * of keepalive data.
+   * In manual mode, this sets `isMuted` for caller logic, but does not
+   * automatically block `send()`.
    */
   public mute(): void {
     this._muted = true;
@@ -239,7 +241,7 @@ export class RealtimeConnection {
    * Unmutes audio capture.
    *
    * Re-enables the `MediaStreamTrack` so real microphone audio flows again
-   * (microphone mode), or clears the `isMuted` flag (manual mode).
+   * (microphone mode), or clears `isMuted` (manual mode).
    */
   public unmute(): void {
     this._muted = false;
@@ -440,6 +442,11 @@ export class RealtimeConnection {
    * @param data.previousText - Send context to the model via base64 encoded audio or text from a previous transcription. Can only be sent alongside the first audio chunk. If sent in a subsequent chunk, an error will be returned.
    *
    * @throws {Error} If the WebSocket connection is not open
+   *
+   * @remarks
+   * `send()` always transmits when connected, even when `isMuted` is `true`.
+   * In microphone mode, mute is implemented by disabling the microphone track,
+   * which causes the browser to produce silence frames.
    *
    * @example
    * ```typescript
