@@ -28,6 +28,8 @@ import type {
 import type { InputConfig } from "./utils/input.js";
 import type { OutputConfig } from "./utils/output.js";
 
+const HTTPS_API_ORIGIN = "https://api.elevenlabs.io";
+
 export type { Role, Mode, Status, Callbacks } from "@elevenlabs/types";
 export { CALLBACK_KEYS } from "@elevenlabs/types";
 
@@ -66,6 +68,10 @@ export type PartialOptions = SessionConfig &
 export type MultimodalMessageInput = {
   text?: string;
   fileId?: string;
+};
+
+export type UploadConversationFileResult = {
+  fileId: string;
 };
 
 export type ClientToolsConfig = {
@@ -579,5 +585,34 @@ export abstract class BaseConversation {
         ? { type: "file_input" as const, file_id: options.fileId }
         : undefined,
     });
+  }
+
+  public async uploadConversationFile(
+    file: Blob
+  ): Promise<UploadConversationFileResult> {
+    const origin = (this.options.origin ?? HTTPS_API_ORIGIN)
+      .replace(/^wss:\/\//, "https://")
+      .replace(/^ws:\/\//, "http://");
+
+    const filename =
+      "name" in file && typeof file.name === "string"
+        ? file.name
+        : `upload.${(file.type || "image/png").split("/").pop()?.split("+")[0]}`;
+
+    const body = new FormData();
+    body.append("file", file, filename);
+
+    const response = await fetch(
+      `${origin}/v1/convai/conversations/${this.connection.conversationId}/files`,
+      { method: "POST", body }
+    );
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Upload failed: ${response.status} ${text}`);
+    }
+
+    const { file_id } = await response.json();
+    return { fileId: file_id };
   }
 }
