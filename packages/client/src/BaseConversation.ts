@@ -5,6 +5,7 @@ import type {
   SessionConfig,
   FormatConfig,
 } from "./utils/BaseConnection.js";
+import { extractApiErrorMessage } from "./utils/errors.js";
 import type { Conversation } from "./index.js";
 import type {
   AgentAudioEvent,
@@ -70,7 +71,7 @@ export type MultimodalMessageInput = {
   fileId?: string;
 };
 
-export type UploadConversationFileResult = {
+export type UploadFileResult = {
   fileId: string;
 };
 
@@ -587,9 +588,7 @@ export abstract class BaseConversation {
     });
   }
 
-  public async uploadConversationFile(
-    file: Blob
-  ): Promise<UploadConversationFileResult> {
+  public async uploadFile(file: Blob): Promise<UploadFileResult> {
     const origin = (this.options.origin ?? HTTPS_API_ORIGIN)
       .replace(/^wss:\/\//, "https://")
       .replace(/^ws:\/\//, "http://");
@@ -608,11 +607,14 @@ export abstract class BaseConversation {
     );
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(`Upload failed: ${response.status} ${text}`);
+      const message = await extractApiErrorMessage(response);
+      throw new Error(`Upload failed: ${response.status} ${message}`);
     }
 
     const { file_id } = await response.json();
+    if (typeof file_id !== "string" || !file_id) {
+      throw new Error("Upload response is missing a valid file_id");
+    }
     return { fileId: file_id };
   }
 }
