@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { VolumeBar } from "./VolumeBar";
 import { FrequencyBands } from "./FrequencyBands";
+import { ImageUpload } from "./ImageUpload";
 import {
   ConversationProvider,
   useConversationControls,
@@ -299,6 +300,10 @@ const ConversationScreen = () => {
               <Text style={styles.buttonText}>Send Context</Text>
             </TouchableOpacity>
           </View>
+          <ImageUpload
+            textInput={textInput}
+            onSent={() => setTextInput("")}
+          />
         </View>
       )}
     </ScrollView>
